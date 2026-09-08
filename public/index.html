@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DogeGrátis - Sua Torneira de Dogecoin</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121620;
+            color: #ffffff;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 450px;
+            margin: 50px auto;
+            background-color: #1a2235;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+            border: 1px solid #ffd15422;
+        }
+        h1 { color: #ffd154; font-size: 28px; margin-bottom: 10px; }
+        .subtitle { color: #a0aec0; font-size: 14px; margin-bottom: 30px; }
+        input[type="text"] {
+            width: 90%; padding: 12px; margin-bottom: 20px; border: 2px solid #2d3748; border-radius: 8px; background-color: #0f131a; color: #fff; font-size: 16px; text-align: center;
+        }
+        input[type="text"]:focus { border-color: #ffd154; outline: none; }
+        button {
+            width: 95%; padding: 14px; background-color: #ffd154; color: #121620; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: background 0.2s;
+        }
+        button:hover { background-color: #e6b83b; }
+        .footer { margin-top: 40px; font-size: 12px; color: #718096; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>🐕 DogeGrátis Faucet</h1>
+        <p class="subtitle">Reivindique suas frações de Dogecoin diretamente na sua conta FaucetPay!</p>
+        
+        <input type="text" id="wallet" placeholder="Insira seu endereço Dogecoin ou E-mail do FaucetPay">
+        <button id="claimBtn">Reivindicar Dogecoin Agora</button>
+        
+        <div id="status" style="margin-top: 20px; font-weight: bold;"></div>
+    </div>
+
+    <div class="footer">Powered by FaucetPay API &copy; 2026</div>
+
+    <script>
+      const claimBtn = document.getElementById('claimBtn');
+      const walletInput = document.getElementById('wallet');
+      const statusDiv = document.getElementById('status');
+
+      function showStatus(text, color) {
+        statusDiv.style.color = color;
+        statusDiv.innerText = text;
+      }
+
+      function isLikelyDogeAddress(value) {
+        return /^[DA9][A-Za-z0-9]{25,34}$/.test(value);
+      }
+
+      function isLikelyEmail(value) {
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+      }
+
+      claimBtn.addEventListener('click', async () => {
+        const carteiraUsuario = walletInput.value.trim();
+        if (!carteiraUsuario) {
+          showStatus('⚠️ Por favor, insira um endereço válido.', '#fc8181');
+          return;
+        }
+
+        if (!(isLikelyEmail(carteiraUsuario) || isLikelyDogeAddress(carteiraUsuario))) {
+          showStatus('⚠️ Formato inválido. Use um e-mail FaucetPay ou um endereço Dogecoin.', '#fc8181');
+          return;
+        }
+
+        showStatus('Processando pagamento...', '#ffd154');
+
+        try {
+          const resp = await fetch('/api/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ walletAddress: carteiraUsuario })
+          });
+
+          const body = await resp.json();
+
+          if (resp.ok && body.success) {
+            showStatus('✅ Sucesso! Suas moedas foram enviadas para o FaucetPay.', '#68d391');
+          } else {
+            showStatus('❌ Erro: ' + (body.error || JSON.stringify(body.data || body)), '#fc8181');
+          }
+        } catch (err) {
+          console.error(err);
+          showStatus('❌ Erro na conexão com o servidor.', '#fc8181');
+        }
+      });
+    </script>
+</body>
+</html>

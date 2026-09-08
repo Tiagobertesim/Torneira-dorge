@@ -1,0 +1,22 @@
+{
+  "name": "torneira-dorge",
+  "version": "1.0.0",
+  "description": "Exemplo de torneira (faucet) de Dogecoin usando FaucetPay - chave no servidor",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js"
+  },
+  "keywords": ["faucet", "dogecoin", "faucetpay"],
+  "author": "Tiagobertesim",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.0.0",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.0",
+    "express-rate-limit": "^6.0.0"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+}
