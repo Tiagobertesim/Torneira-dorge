@@ -53,6 +53,7 @@
       const claimBtn = document.getElementById('claimBtn');
       const walletInput = document.getElementById('wallet');
       const statusDiv = document.getElementById('status');
+      let recaptchaSiteKey = '';
 
       function showStatus(text, color) {
         statusDiv.style.color = color;
@@ -67,25 +68,32 @@
         return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
       }
 
-      claimBtn.addEventListener('click', async () => {
-        const carteiraUsuario = walletInput.value.trim();
-        if (!carteiraUsuario) {
-          showStatus('⚠️ Por favor, insira um endereço válido.', '#fc8181');
-          return;
+      async function loadConfig() {
+        try {
+          const resp = await fetch('/api/config');
+          if (!resp.ok) return;
+          const cfg = await resp.json();
+          recaptchaSiteKey = cfg.recaptchaSiteKey || '';
+          if (recaptchaSiteKey) {
+            // Carrega o script do reCAPTCHA v3 dinamicamente
+            const s = document.createElement('script');
+            s.src = `https://www.google.com/recaptcha/api.js?render=${recaptchaSiteKey}`;
+            s.async = true;
+            s.defer = true;
+            document.head.appendChild(s);
+          }
+        } catch (err) {
+          console.warn('Não foi possível carregar configuração:', err);
         }
+      }
 
-        if (!(isLikelyEmail(carteiraUsuario) || isLikelyDogeAddress(carteiraUsuario))) {
-          showStatus('⚠️ Formato inválido. Use um e-mail FaucetPay ou um endereço Dogecoin.', '#fc8181');
-          return;
-        }
-
+      async function sendClaim(wallet, token) {
         showStatus('Processando pagamento...', '#ffd154');
-
         try {
           const resp = await fetch('/api/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ walletAddress: carteiraUsuario })
+            body: JSON.stringify({ walletAddress: wallet, recaptchaToken: token })
           });
 
           const body = await resp.json();
@@ -99,7 +107,39 @@
           console.error(err);
           showStatus('❌ Erro na conexão com o servidor.', '#fc8181');
         }
+      }
+
+      claimBtn.addEventListener('click', async () => {
+        const carteiraUsuario = walletInput.value.trim();
+        if (!carteiraUsuario) {
+          showStatus('⚠️ Por favor, insira um endereço válido.', '#fc8181');
+          return;
+        }
+
+        if (!(isLikelyEmail(carteiraUsuario) || isLikelyDogeAddress(carteiraUsuario))) {
+          showStatus('⚠️ Formato inválido. Use um e-mail FaucetPay ou um endereço Dogecoin.', '#fc8181');
+          return;
+        }
+
+        if (recaptchaSiteKey && window.grecaptcha) {
+          try {
+            grecaptcha.ready(async () => {
+              const token = await grecaptcha.execute(recaptchaSiteKey, { action: 'claim' });
+              await sendClaim(carteiraUsuario, token);
+            });
+          } catch (err) {
+            console.error('Erro no reCAPTCHA:', err);
+            // Fallback: enviar sem token (servidor pode rejeitar)
+            await sendClaim(carteiraUsuario, '');
+          }
+        } else {
+          // Sem reCAPTCHA configurado no servidor, envia sem token – não recomendado
+          await sendClaim(carteiraUsuario, '');
+        }
       });
+
+      // Carrega configuração (site key) ao iniciar
+      loadConfig();
     </script>
 </body>
 </html>

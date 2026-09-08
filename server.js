@@ -29,6 +29,34 @@ function isLikelyDogeAddress(value) {
   return /^[DA9][A-Za-z0-9]{25,34}$/.test(value);
 }
 
+// Expor a chave pública do reCAPTCHA (site key) para o frontend — não é segredo
+app.get('/api/config', (req, res) => {
+  const siteKey = process.env.RECAPTCHA_SITE_KEY || '';
+  res.json({ recaptchaSiteKey: siteKey });
+});
+
+// Função para verificar token reCAPTCHA v3 com Google
+async function verifyReCaptcha(token, remoteIp) {
+  const secret = process.env.RECAPTCHA_SECRET;
+  if (!secret) return { success: false, error: 'recaptcha-secret-not-configured' };
+
+  try {
+    const params = new URLSearchParams();
+    params.append('secret', secret);
+    params.append('response', token);
+    if (remoteIp) params.append('remoteip', remoteIp);
+
+    const resp = await axios.post('https://www.google.com/recaptcha/api/siteverify', params.toString(), {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    });
+
+    return resp.data; // contains success, score, action, etc.
+  } catch (err) {
+    console.error('Erro ao verificar reCAPTCHA:', err?.response?.data || err.message);
+    return { success: false, error: 'recaptcha-verification-failed' };
+  }
+}
+
 // Endpoint seguro que usa a API key do servidor (NUNCA colocar a chave no frontend)
 app.post('/api/send', faucetLimiter, async (req, res) => {
   const { walletAddress, recaptchaToken } = req.body;
@@ -42,8 +70,24 @@ app.post('/api/send', faucetLimiter, async (req, res) => {
     return res.status(400).json({ error: 'Formato de endereço inválido. Use um e-mail FaucetPay ou um endereço Dogecoin.' });
   }
 
-  // Aqui você deve verificar o recaptchaToken com o serviço do Google reCAPTCHA (opcional, mas recomendado)
-  // Se usar reCAPTCHA, verifique no backend antes de prosseguir.
+  // Verifica reCAPTCHA v3 (opcional, mas recomendado)
+  if (process.env.RECAPTCHA_SECRET) {
+    if (!recaptchaToken) {
+      return res.status(400).json({ error: 'reCAPTCHA token ausente. Complete o verificador anti-bot.' });
+    }
+
+    const recaptchaResult = await verifyReCaptcha(recaptchaToken, req.ip);
+    if (!recaptchaResult || !recaptchaResult.success) {
+      return res.status(403).json({ error: 'reCAPTCHA falhou. Acesso negado.', recaptcha: recaptchaResult });
+    }
+
+    // Para reCAPTCHA v3, verifique score e action
+    const score = typeof recaptchaResult.score === 'number' ? recaptchaResult.score : 0;
+    const action = recaptchaResult.action || '';
+    if (action !== 'claim' || score < 0.5) {
+      return res.status(403).json({ error: 'reCAPTCHA score insuficiente ou ação inválida.', recaptcha: recaptchaResult });
+    }
+  }
 
   const apiKey = process.env.FAUCETPAY_API_KEY;
   const reward = process.env.REWARD_KOINU || '100000'; // koinu (0.001 DOGE)
